@@ -320,6 +320,7 @@ class DPVO:
 
         if self.viewer is not None:
             self.viewer.update_image(image)
+            self.viewer.loop()
 
         image = 2 * (image[None,None] / 255.0) - 0.5
         
@@ -329,7 +330,6 @@ class DPVO:
                     patches_per_image=self.cfg.PATCHES_PER_FRAME, 
                     gradient_bias=self.cfg.GRADIENT_BIAS, 
                     return_color=True)
-
         ### update state attributes ###
         self.tlist.append(tstamp)
         self.tstamps_[self.n] = self.counter

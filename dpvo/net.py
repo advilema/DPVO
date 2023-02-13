@@ -130,7 +130,7 @@ class Patchifier(nn.Module):
         else:
             x = torch.randint(1, w-1, size=[n, patches_per_image], device="cuda")
             y = torch.randint(1, h-1, size=[n, patches_per_image], device="cuda")
-        
+
         coords = torch.stack([x, y], dim=-1).float()
         imap = altcorr.patchify(imap[0], coords, 0).view(b, -1, DIM, 1, 1)
         gmap = altcorr.patchify(fmap[0], coords, 1).view(b, -1, 128, 3, 3)
@@ -185,8 +185,9 @@ class VONet(nn.Module):
         """ Estimates SE3 or Sim3 between pair of frames """
 
         images = 2 * (images / 255.0) - 0.5
-        intrinsics = intrinsics / 4.0
-        disps = disps[:, :, 1::4, 1::4].float()
+        intrinsics = intrinsics / 4.
+        if disps is not None:
+            disps = disps[:, :, 1::4, 1::4].float()
 
         fmap, gmap, imap, patches, ix = self.patchify(images, disps=disps)
 

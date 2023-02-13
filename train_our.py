@@ -9,6 +9,7 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from dpvo.data_readers.factory import dataset_factory
+from dpvo.data_readers.racing import Racing
 
 from dpvo.lietorch import SE3
 from dpvo.logger import Logger
@@ -44,11 +45,14 @@ def kabsch_umeyama(A, B):
 def train(args):
     """ main training loop """
 
+
     # legacy ddp code
     rank = 0
 
-    db = dataset_factory(['tartan'], datapath="datasets/TartanAir", n_frames=args.n_frames)
-    print('db done')
+    # TODO: qua dobbiamo intervenire
+    #db = dataset_factory(['tartan'], datapath="datasets/TartanAir", n_frames=args.n_frames)
+    datapath = '/home/mario/Desktop/Tesi/DPVO/datasets/racing'
+    db = Racing(datapath, n_frames=args.n_frames, scale=0.05)
     train_loader = DataLoader(db, batch_size=1, shuffle=True, num_workers=4)
 
     net = VONet()
@@ -74,7 +78,9 @@ def train(args):
 
     while 1:
         for data_blob in train_loader:
-            images, poses, disps, intrinsics = [x.cuda().float() for x in data_blob]
+            images, poses, intrinsics = [x.cuda().float() for x in data_blob]
+            #disps = [None for _ in range(len(poses))]
+            disps = None
             optimizer.zero_grad()
 
             # fix poses to gt for first 1k steps
@@ -164,7 +170,7 @@ if __name__ == '__main__':
     parser.add_argument('--steps', type=int, default=240000)
     parser.add_argument('--lr', type=float, default=0.00008)
     parser.add_argument('--clip', type=float, default=10.0)
-    parser.add_argument('--n_frames', type=int, default=15)
+    parser.add_argument('--n_frames', type=int, default=2)
     parser.add_argument('--pose_weight', type=float, default=10.0)
     parser.add_argument('--flow_weight', type=float, default=0.1)
     args = parser.parse_args()
