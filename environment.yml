@@ -124,9 +124,6 @@ dependencies:
   - python=3.10.0=h12debd9_5
   - python-dateutil=2.8.2=pyhd3eb1b0_0
   - python_abi=3.10=2_cp310
-  - pytorch=1.12.0=py3.10_cuda11.3_cudnn8.3.2_0
-  - pytorch-mutex=1.0=cuda
-  - pytorch-scatter=2.0.9=py310_torch_1.12.0_cu113
   - pyu2f=0.1.5=pyhd8ed1ab_0
   - pyzmq=23.2.0=py310h6a678d5_0
   - qt=5.9.7=h5867ecd_1
@@ -167,8 +164,6 @@ dependencies:
       - beautifulsoup4==4.11.1
       - cmake==3.22.4
       - colorama==0.4.5
-      - dpviewer==0.0.1
-      - dpvo==0.0.0
       - evo==1.18.1
       - filelock==3.7.1
       - gdown==4.5.1
