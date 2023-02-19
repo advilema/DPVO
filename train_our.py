@@ -76,7 +76,6 @@ def train(args):
     total_steps = 0
 
     while 1:
-        print(total_steps)
         for data_blob in train_loader:
             images, poses, intrinsics = [x.cuda().float() for x in data_blob]
             #disps = [None for _ in range(len(poses))]
@@ -132,6 +131,7 @@ def train(args):
             scheduler.step()
 
             total_steps += 1
+            print(total_steps, loss.item())
 
             metrics = {
                 "loss": loss.item(),
