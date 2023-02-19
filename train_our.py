@@ -165,7 +165,7 @@ def train(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--name', default='bla', help='name your experiment')
-    parser.add_argument('--datapath', default='/data/scratch/marcomagno', help='path to dataset')
+    parser.add_argument('--datapath', default='/data/scratch/marcomagno/racing', help='path to dataset')
     parser.add_argument('--ckpt', default='dpvo.pth', help='checkpoint to restore')
     parser.add_argument('--steps', type=int, default=240000)
     parser.add_argument('--lr', type=float, default=0.00008)
