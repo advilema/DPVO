@@ -1,4 +1,4 @@
-name: /home/mario/miniconda3/envs/dpvo
+name: dpvo
 channels:
   - pyg
   - pytorch
@@ -187,4 +187,4 @@ dependencies:
       - soupsieve==2.3.2.post1
       - yacs==0.1.8
       - zstandard==0.18.0
-prefix: /home/mario/miniconda3/envs/dpvo
+prefix: dpvo
