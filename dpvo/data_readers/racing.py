@@ -16,7 +16,7 @@ test_split = [
 """
 
 train_split = [
-    "2022-06-08-21-23-03"
+    "2022-06-08-21-23-03",
 ]
 
 
@@ -37,8 +37,8 @@ class Racing(Dataset):
         scenes = glob.glob(osp.join(self.datapath, '*/'))
         for scene in tqdm(sorted(scenes)):
             if scene not in train_split:
+                print(scene)
                 continue
-            print(scene)
             images = sorted(glob.glob(osp.join(scene, 'images/*.png')))
             poses = np.loadtxt(osp.join(scene, 'poses.csv'), delimiter=',')
             intrinsics = np.loadtxt(osp.join(scene, 'intrinsics.csv'), delimiter=',')
