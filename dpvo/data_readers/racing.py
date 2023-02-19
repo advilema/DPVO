@@ -6,11 +6,17 @@ import cv2
 import os.path as osp
 
 
+"""
 test_split = [
     "2022-06-08-21-23-03",
     "2022-03-16-16-12-49",
     "2022-06-07-20-22-25",
     "2022-06-10-03-14-16"
+]
+"""
+
+train_split = [
+    "2022-06-08-21-23-03"
 ]
 
 
@@ -30,7 +36,7 @@ class Racing(Dataset):
         info_dataset = {}
         scenes = glob.glob(osp.join(self.datapath, '*/'))
         for scene in tqdm(sorted(scenes)):
-            if scene in test_split:
+            if scene not in train_split:
                 continue
             images = sorted(glob.glob(osp.join(scene, 'images/*.png')))
             poses = np.loadtxt(osp.join(scene, 'poses.csv'), delimiter=',')
