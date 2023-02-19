@@ -167,8 +167,6 @@ dependencies:
       - beautifulsoup4==4.11.1
       - cmake==3.22.4
       - colorama==0.4.5
-      - dpviewer==0.0.1
-      - dpvo==0.0.0
       - evo==1.18.1
       - filelock==3.7.1
       - gdown==4.5.1
