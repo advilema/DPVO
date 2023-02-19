@@ -49,10 +49,9 @@ def train(args):
     # legacy ddp code
     rank = 0
 
-    # TODO: qua dobbiamo intervenire
     #db = dataset_factory(['tartan'], datapath="datasets/TartanAir", n_frames=args.n_frames)
-    datapath = '/home/mario/Desktop/Tesi/DPVO/datasets/racing'
-    db = Racing(datapath, n_frames=args.n_frames, scale=0.05)
+    #datapath = '/home/mario/Desktop/Tesi/DPVO/datasets/racing'
+    db = Racing(args.datapath, n_frames=args.n_frames, scale=0.05)
     train_loader = DataLoader(db, batch_size=1, shuffle=True, num_workers=4)
 
     net = VONet()
@@ -166,6 +165,7 @@ def train(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--name', default='bla', help='name your experiment')
+    parser.add_argument('--datapath', default='/data/scratch/marcomagno', help='path to dataset')
     parser.add_argument('--ckpt', default='dpvo.pth', help='checkpoint to restore')
     parser.add_argument('--steps', type=int, default=240000)
     parser.add_argument('--lr', type=float, default=0.00008)
