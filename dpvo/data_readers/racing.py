@@ -38,6 +38,7 @@ class Racing(Dataset):
         for scene in tqdm(sorted(scenes)):
             if scene not in train_split:
                 continue
+            print(scene)
             images = sorted(glob.glob(osp.join(scene, 'images/*.png')))
             poses = np.loadtxt(osp.join(scene, 'poses.csv'), delimiter=',')
             intrinsics = np.loadtxt(osp.join(scene, 'intrinsics.csv'), delimiter=',')
