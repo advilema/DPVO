@@ -61,7 +61,7 @@ class Racing(Dataset):
         intrinsics = [self.info_dataset[scene]['intrinsics'][i] for i in indices]
 
         images = np.stack(images).astype(np.float32)
-        print(images.shape)
+        #print(images.shape)
         poses = np.stack(poses).astype(np.float32)
         intrinsics = np.stack(intrinsics).astype(np.float32)
 
