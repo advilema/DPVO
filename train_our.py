@@ -51,7 +51,7 @@ def train(args):
 
     #db = dataset_factory(['tartan'], datapath="datasets/TartanAir", n_frames=args.n_frames)
     #datapath = '/home/mario/Desktop/Tesi/DPVO/datasets/racing'
-    db = Racing(args.datapath, n_frames=args.n_frames, scale=0.05)
+    db = Racing(args.datapath, n_frames=args.n_frames, scale=1.0)
     train_loader = DataLoader(db, batch_size=1, shuffle=True, num_workers=4)
 
     net = VONet()
@@ -76,6 +76,7 @@ def train(args):
     total_steps = 0
 
     while 1:
+        print(total_steps)
         for data_blob in train_loader:
             images, poses, intrinsics = [x.cuda().float() for x in data_blob]
             #disps = [None for _ in range(len(poses))]
