@@ -75,7 +75,7 @@ def train(args):
 
     total_steps = 0
 
-    while 1:
+    while total_steps < args.steps:
         for data_blob in train_loader:
             images, poses, intrinsics = [x.cuda().float() for x in data_blob]
             #disps = [None for _ in range(len(poses))]
@@ -148,10 +148,12 @@ def train(args):
             if rank == 0:
                 logger.push(metrics)
 
-            if total_steps % 1000 == 0:
+            if total_steps % (int(args.steps / 10)) == 0:
                 torch.cuda.empty_cache()
 
                 if rank == 0:
+                    if not os.path.isdir('checkpoints'):
+                        os.mkdir('checkpoints')
                     PATH = 'checkpoints/%s_%06d.pth' % (args.name, total_steps)
                     torch.save(net.state_dict(), PATH)
 
@@ -161,6 +163,8 @@ def train(args):
 
                 torch.cuda.empty_cache()
                 net.train()
+            if total_steps == args.steps:
+                break
 
 
 if __name__ == '__main__':
