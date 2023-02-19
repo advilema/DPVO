@@ -171,7 +171,7 @@ if __name__ == '__main__':
     parser.add_argument('--steps', type=int, default=240000)
     parser.add_argument('--lr', type=float, default=0.00008)
     parser.add_argument('--clip', type=float, default=10.0)
-    parser.add_argument('--n_frames', type=int, default=2)
+    parser.add_argument('--n_frames', type=int, default=10)
     parser.add_argument('--pose_weight', type=float, default=10.0)
     parser.add_argument('--flow_weight', type=float, default=0.1)
     args = parser.parse_args()
