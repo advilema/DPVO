@@ -52,7 +52,7 @@ def train(args):
     #db = dataset_factory(['tartan'], datapath="datasets/TartanAir", n_frames=args.n_frames)
     #datapath = '/home/mario/Desktop/Tesi/DPVO/datasets/racing'
     db = Racing(args.datapath, n_frames=args.n_frames, scale=1.0)
-    train_loader = DataLoader(db, batch_size=1, shuffle=True, num_workers=4)
+    train_loader = DataLoader(db, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     net = VONet()
     net.train()
@@ -173,6 +173,7 @@ if __name__ == '__main__':
     parser.add_argument('--datapath', default='/data/scratch/marcomagno/racing', help='path to dataset')
     parser.add_argument('--ckpt', help='checkpoint to restore')
     parser.add_argument('--steps', type=int, default=240000)
+    parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.00008)
     parser.add_argument('--clip', type=float, default=10.0)
     parser.add_argument('--n_frames', type=int, default=10)
