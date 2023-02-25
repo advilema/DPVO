@@ -52,6 +52,8 @@ class Racing(Dataset):
         for scene in self.info_dataset:
             n_frames_scene = self.info_dataset[scene]['poses'].shape[0]
             for i in range(n_frames_scene):
+                if i < 136:
+                    continue
                 indices = [i]
                 idx = 1
                 while i + idx < n_frames_scene and idx < self.n_frames:
@@ -64,6 +66,7 @@ class Racing(Dataset):
     def __getitem__(self, index):
         scene = self.dataset_index[index][0]
         indices = self.dataset_index[index][1:]
+        print(indices)
 
         images = []
         for i in indices:
