@@ -6,18 +6,18 @@ import cv2
 import os.path as osp
 
 
-"""
+
 test_split = [
     "2022-06-08-21-23-03",
     "2022-03-16-16-12-49",
     "2022-06-07-20-22-25",
     "2022-06-10-03-14-16"
 ]
-"""
 
-train_split = [
-    "2022-06-08-21-19-03",
-]
+
+#train_split = [
+#    "2022-06-08-21-19-03",
+#]
 
 
 class Racing(Dataset):
@@ -35,7 +35,7 @@ class Racing(Dataset):
 
         info_dataset = {}
         scenes = glob.glob(osp.join(self.datapath, '*/'))
-        scenes = [scene for scene in scenes if osp.basename(osp.dirname(scene)) in train_split]
+        scenes = [scene for scene in scenes if osp.basename(osp.dirname(scene)) not in test_split]
         for scene in tqdm(sorted(scenes)):
             images = sorted(glob.glob(osp.join(scene, 'images/*.png')))
             poses = np.loadtxt(osp.join(scene, 'poses.csv'), delimiter=',')
@@ -66,7 +66,7 @@ class Racing(Dataset):
     def __getitem__(self, index):
         scene = self.dataset_index[index][0]
         indices = self.dataset_index[index][1:]
-        print(indices)
+        #print(indices)
 
         images = []
         for i in indices:
