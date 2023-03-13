@@ -7,17 +7,17 @@ import os.path as osp
 
 
 
-test_split = [
-    "2022-06-08-21-23-03",
-    "2022-03-16-16-12-49",
-    "2022-06-07-20-22-25",
-    "2022-06-10-03-14-16"
-]
-
-
-#train_split = [
-#    "2022-06-08-21-19-03",
+#test_split = [
+#    "2022-06-08-21-23-03",
+#    "2022-03-16-16-12-49",
+#    "2022-06-07-20-22-25",
+#    "2022-06-10-03-14-16"
 #]
+
+
+train_split = [
+    "indoor_forward_3_snapdragon_with_gt",
+]
 
 
 class Racing(Dataset):
@@ -35,7 +35,7 @@ class Racing(Dataset):
 
         info_dataset = {}
         scenes = glob.glob(osp.join(self.datapath, '*/'))
-        scenes = [scene for scene in scenes if osp.basename(osp.dirname(scene)) not in test_split]
+        scenes = [scene for scene in scenes if osp.basename(osp.dirname(scene)) in train_split]
         for scene in tqdm(sorted(scenes)):
             images = sorted(glob.glob(osp.join(scene, 'images/*.png')))
             poses = np.loadtxt(osp.join(scene, 'poses.csv'), delimiter=',')
@@ -52,8 +52,6 @@ class Racing(Dataset):
         for scene in self.info_dataset:
             n_frames_scene = self.info_dataset[scene]['poses'].shape[0]
             for i in range(n_frames_scene):
-                if i < 136:
-                    continue
                 indices = [i]
                 idx = 1
                 while i + idx < n_frames_scene and idx < self.n_frames:
