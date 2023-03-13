@@ -16,7 +16,7 @@ import os.path as osp
 
 
 train_split = [
-    "indoor_forward_5_snapdragon_with_gt",
+    "2022-06-08-21-23-03",
 ]
 
 
