@@ -15,8 +15,12 @@ import os.path as osp
 #]
 
 
+#train_split = [
+#    "2022-06-08-21-23-03",
+#]
+
 train_split = [
-    "2022-06-08-21-23-03",
+    "indoor_forward_3_snapdragon_with_gt",
 ]
 
 
