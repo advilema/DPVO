@@ -89,7 +89,12 @@ def train(args):
             traj = net(images, poses, disps, intrinsics, M=1024, STEPS=18, structure_only=so)
 
             loss = 0.0
+            ro_error, tr_error = 0., 0.
             for i, (v, x, y, P1, P2, kl) in enumerate(traj):
+                # v: valid, x: estimated coordinates of the patches in frame ii projected into frame jj,
+                # y: coordinates_gt: same as x but ground truth. Note that to have actual gt you need a depth map,
+                # P1: estimated poses, P2: gt poses, kl: not used.
+
                 e = (x - y).norm(dim=-1)
                 e = e.reshape(-1, 9)[(v > 0.5).reshape(-1)].min(dim=-1).values
 
@@ -121,10 +126,19 @@ def train(args):
                 loss += args.flow_weight * e.mean()
                 if not so and i >= 2:
                     loss += args.pose_weight * ( tr.mean() + ro.mean() )
+                    ro_error += ro.mean()
+                    tr_error += tr.mean()
 
             # kl is 0 (not longer used)
             loss += kl
             loss.backward()
+
+            with open('rot_error.txt', 'a+') as file:
+                np.savetxt(file, ro_error)
+            with open('trans_error.txt', 'a+') as file:
+                np.savetxt(file, tr_error)
+            with open('loss.txt', 'a+') as file:
+                np.savetxt(file, loss)
 
             torch.nn.utils.clip_grad_norm_(net.parameters(), args.clip)
             optimizer.step()
@@ -181,4 +195,10 @@ if __name__ == '__main__':
     parser.add_argument('--flow_weight', type=float, default=0.1)
     args = parser.parse_args()
 
+    with open('rot_error.txt', 'w') as file:
+        file.write('')
+    with open('trans_error.txt', 'w') as file:
+        file.write('')
+    with open('loss.txt', 'w') as file:
+        file.write('')
     train(args)
