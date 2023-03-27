@@ -140,11 +140,11 @@ def train(args):
             print()
 
             with open('rot_error.txt', 'a+') as file:
-                np.savetxt(file, np.array([ro_error]))
+                np.savetxt(file, np.array([ro_error.cpu()]))
             with open('trans_error.txt', 'a+') as file:
-                np.savetxt(file, np.array([tr_error]))
+                np.savetxt(file, np.array([tr_error.cpu()]))
             with open('loss.txt', 'a+') as file:
-                np.savetxt(file, np.array([loss]))
+                np.savetxt(file, np.array([loss.cpu()]))
 
             torch.nn.utils.clip_grad_norm_(net.parameters(), args.clip)
             optimizer.step()
