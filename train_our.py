@@ -140,9 +140,9 @@ def train(args):
             print()
 
             with open('rot_error.txt', 'a+') as file:
-                np.savetxt(file, np.array([ro_error.cpu()]))
+                np.savetxt(file, np.array([ro_error]))
             with open('trans_error.txt', 'a+') as file:
-                np.savetxt(file, np.array([tr_error.cpu()]))
+                np.savetxt(file, np.array([tr_error]))
             with open('loss.txt', 'a+') as file:
                 np.savetxt(file, np.array([loss.cpu()]))
 
