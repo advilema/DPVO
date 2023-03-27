@@ -133,6 +133,12 @@ def train(args):
             loss += kl
             loss.backward()
 
+            print('**** step: {}'.format(total_steps))
+            print('loss: {}'.format(loss))
+            print('translation error: {}'.format(tr_error))
+            print('rotation error: {}'.format(ro_error))
+            print()
+
             with open('rot_error.txt', 'a+') as file:
                 np.savetxt(file, ro_error)
             with open('trans_error.txt', 'a+') as file:
