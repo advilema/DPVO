@@ -152,7 +152,6 @@ def train(args):
             scheduler.step()
 
             total_steps += 1
-            print(total_steps, loss.item())
 
             metrics = {
                 "loss": loss.item(),
