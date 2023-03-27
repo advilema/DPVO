@@ -83,7 +83,8 @@ def train(args):
             optimizer.zero_grad()
 
             # fix poses to gt for first 1k steps
-            so = total_steps < 1000 and args.ckpt is None
+            #so = total_steps < 1000 and args.ckpt is None
+            so = True
 
             poses = SE3(poses).inv()
             traj = net(images, poses, disps, intrinsics, M=1024, STEPS=18, structure_only=so)
