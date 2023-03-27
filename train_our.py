@@ -144,7 +144,7 @@ def train(args):
             with open('trans_error.txt', 'a+') as file:
                 np.savetxt(file, np.array([tr_error]))
             with open('loss.txt', 'a+') as file:
-                np.savetxt(file, np.array([loss.cpu()]))
+                np.savetxt(file, np.array([loss.cpu().detach()]))
 
             torch.nn.utils.clip_grad_norm_(net.parameters(), args.clip)
             optimizer.step()
