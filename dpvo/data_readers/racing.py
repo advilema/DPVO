@@ -19,8 +19,17 @@ import os.path as osp
 #    "2022-06-08-21-23-03",
 #]
 
-train_split = [
-    "indoor_forward_3_snapdragon_with_gt",
+#train_split = [
+#    "indoor_forward_3_snapdragon_with_gt",
+#]
+
+test_split = [
+    'indoor_45_3_snapdragon',
+    'indoor_45_16_snapdragon',
+    'indoor_forward_11_snapdragon',
+    'indoor_forward_12_snapdragon',
+    'outdoor_forward_9_snapdragon',
+    'outdoor_forward_10_snapdragon',
 ]
 
 
@@ -39,7 +48,7 @@ class Racing(Dataset):
 
         info_dataset = {}
         scenes = glob.glob(osp.join(self.datapath, '*/'))
-        scenes = [scene for scene in scenes if osp.basename(osp.dirname(scene)) in train_split]
+        scenes = [scene for scene in scenes if osp.basename(osp.dirname(scene)) not in test_split]
         for scene in tqdm(sorted(scenes)):
             images = sorted(glob.glob(osp.join(scene, 'images/*.png')))
             poses = np.loadtxt(osp.join(scene, 'poses.csv'), delimiter=',')
