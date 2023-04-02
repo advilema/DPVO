@@ -20,6 +20,19 @@ from evaluate_tartan import evaluate as validate
 import wandb
 
 
+def kabsch_umeyama(A, B):
+    n, m = A.shape
+    EA = torch.mean(A, axis=0)
+    EB = torch.mean(B, axis=0)
+    VarA = torch.mean((A - EA).norm(dim=1)**2)
+
+    H = ((A - EA).T @ (B - EB)) / n
+    U, D, VT = torch.svd(H)
+
+    c = VarA / torch.trace(torch.diag(D))
+    return c
+
+
 def evaluate_trajectory(net, images, poses, disps, intrinsics):
     # fix poses to gt for first 1k steps
     # so = total_steps < 1000 and args.ckpt is None
@@ -70,19 +83,6 @@ def evaluate_trajectory(net, images, poses, disps, intrinsics):
             tr_error += tr.mean()
 
     return loss, tr_error, ro_error
-
-
-def kabsch_umeyama(A, B):
-    n, m = A.shape
-    EA = torch.mean(A, axis=0)
-    EB = torch.mean(B, axis=0)
-    VarA = torch.mean((A - EA).norm(dim=1)**2)
-
-    H = ((A - EA).T @ (B - EB)) / n
-    U, D, VT = torch.svd(H)
-
-    c = VarA / torch.trace(torch.diag(D))
-    return c
 
 
 # TODO: add validation
