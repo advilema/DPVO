@@ -86,13 +86,49 @@ def augment_images(images):
 
 
 class Racing(Dataset):
-    def __init__(self, datapath, n_frames=5, scale=0.5):
+    def __init__(self, datapath, n_frames=5, scale=0.5, augmentation=True):
         super(Racing, self).__init__()
         self.datapath = datapath
         self.n_frames = n_frames
         self.info_dataset = self._build_dataset()
         self.dataset_index = self._build_index()
+        self.dict_test_index = self._build_test_index()
         self.scale = scale
+        self.augmentation = augmentation
+
+
+    def get_test(self, num_iterations):
+        iterations_per_sample = num_iterations // len(test_split)
+
+        for scene in test_split:
+            max_index = len(self.dict_test_index[scene])
+            scene_indices = (np.random.rand(iterations_per_sample)*max_index).astype(int)
+
+            for index in scene_indices:
+                indices = self.dict_test_index[scene]
+                # print(indices)
+
+                images = []
+                for i in indices:
+                    img = cv2.imread(self.info_dataset[scene]['images'][i])
+                    h, w = img.shape[:2]
+                    img = cv2.resize(img, (int(w * self.scale), int(h * self.scale)))
+                    images.append(img)
+
+                poses = [self.info_dataset[scene]['poses'][i] for i in indices]
+                intrinsics = [self.info_dataset[scene]['intrinsics'][i] for i in indices]
+
+                images = np.stack(images).astype(np.float32)
+                # print(images.shape)
+                poses = np.stack(poses).astype(np.float32)
+                intrinsics = np.stack(intrinsics).astype(np.float32)
+
+                images = torch.from_numpy(images).float()
+                images = images.permute(0, 3, 1, 2)
+                poses = torch.from_numpy(poses)
+                intrinsics = torch.from_numpy(intrinsics)
+
+                yield images, poses, intrinsics
 
     def _build_dataset(self):
         from tqdm import tqdm
@@ -100,7 +136,7 @@ class Racing(Dataset):
 
         info_dataset = {}
         scenes = glob.glob(osp.join(self.datapath, '*/'))
-        scenes = [scene for scene in scenes if osp.basename(osp.dirname(scene)) not in test_split]
+        #scenes = [scene for scene in scenes if osp.basename(osp.dirname(scene)) not in test_split]
         for scene in tqdm(sorted(scenes)):
             images = sorted(glob.glob(osp.join(scene, 'images/*.png')))
             poses = np.loadtxt(osp.join(scene, 'poses.csv'), delimiter=',')
@@ -115,6 +151,8 @@ class Racing(Dataset):
     def _build_index(self):
         dataset_index = []
         for scene in self.info_dataset:
+            if scene in test_split:
+                continue
             n_frames_scene = self.info_dataset[scene]['poses'].shape[0]
             for i in range(n_frames_scene):
                 indices = [i]
@@ -125,6 +163,24 @@ class Racing(Dataset):
                 if len(indices) == self.n_frames:
                     dataset_index.append([scene, *indices])
         return dataset_index
+
+    def _build_test_index(self):
+        dict_test_index = []
+        for scene in self.info_dataset:
+            if scene not in test_split:
+                continue
+            if scene not in dict_test_index:
+                dict_test_index[scene] = []
+            n_frames_scene = self.info_dataset[scene]['poses'].shape[0]
+            for i in range(n_frames_scene):
+                indices = [i]
+                idx = 1
+                while i + idx < n_frames_scene and idx < self.n_frames:
+                    indices.append(i + idx)
+                    idx += 1
+                if len(indices) == self.n_frames:
+                    dict_test_index[scene].append([*indices])
+        return dict_test_index
 
     def __getitem__(self, index):
         scene = self.dataset_index[index][0]
@@ -137,7 +193,8 @@ class Racing(Dataset):
             h, w = img.shape[:2]
             img = cv2.resize(img, (int(w*self.scale), int(h*self.scale)))
             images.append(img)
-        images = augment_images(images)
+        if self.augmentation:
+            images = augment_images(images)
 
         poses = [self.info_dataset[scene]['poses'][i] for i in indices]
         intrinsics = [self.info_dataset[scene]['intrinsics'][i] for i in indices]
