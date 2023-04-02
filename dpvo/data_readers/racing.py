@@ -4,6 +4,9 @@ from torch.utils.data import Dataset
 import torch
 import cv2
 import os.path as osp
+import imgaug as ia
+from imgaug import augmenters as iaa
+ia.seed(0)
 
 
 
@@ -31,6 +34,55 @@ test_split = [
     'outdoor_forward_9_snapdragon',
     'outdoor_forward_10_snapdragon',
 ]
+
+
+def augment_images(images):
+    # takes an input a list of images and transform them
+
+    # choose one of the following contrast augmentations
+    contrast_aug = iaa.OneOf([
+        iaa.GammaContrast((0.67, 1.5)),
+        iaa.SigmoidContrast(gain=(3, 10), cutoff=(0.4, 0.6)),
+        iaa.LinearContrast((0.4, 1.6)),
+        iaa.AllChannelsCLAHE(),
+    ])
+
+    # combine 2 augmentations from contrast, brightness and sharpen, and apply them in random order
+    colors_aug = iaa.SomeOf(2, [
+        contrast_aug,
+        iaa.MultiplyAndAddToBrightness(mul=(0.67, 1.5), add=(-10, 10)),
+        iaa.Sharpen(alpha=(0.0, 0.5), lightness=(0.75, 2.0)),
+    ], random_order=True)
+
+    # the colors augmentation only apply 50% of the times
+    colors_aug = iaa.Sometimes(0.5, colors_aug)
+
+    # combine 2 augmentations from gaussian noise, coarse drop out and salt and pepper, and apply them in random order
+    noise_aug = iaa.SomeOf(2, [
+        iaa.AdditiveGaussianNoise(scale=(0, 20)),
+        iaa.CoarseDropout((0.0, 0.005), size_percent=(0.05, 0.3)),
+        iaa.SaltAndPepper((0, 0.02)),
+    ], random_order=True)
+
+    # include the cut-out augmentation, where entire regions are being cut out from the image
+    noise_aug = iaa.Sequential([
+        noise_aug,
+        iaa.Cutout(nb_iterations=(0, 3), size=0.15, squared=False, fill_mode="constant", cval=0),
+    ])
+
+    # the noise augmentation only apply 50% of the times
+    noise_aug = iaa.Sometimes(0.5, noise_aug)
+
+    aug_prov = iaa.Sequential([
+        colors_aug,
+        noise_aug,
+    ])
+
+    # apply the transformation to 50% of the images
+    aug = iaa.Sometimes(0.5, aug_prov)
+
+    images_aug = aug(images=images)
+    return images_aug
 
 
 class Racing(Dataset):
@@ -85,6 +137,7 @@ class Racing(Dataset):
             h, w = img.shape[:2]
             img = cv2.resize(img, (int(w*self.scale), int(h*self.scale)))
             images.append(img)
+        images = augment_images(images)
 
         poses = [self.info_dataset[scene]['poses'][i] for i in indices]
         intrinsics = [self.info_dataset[scene]['intrinsics'][i] for i in indices]
