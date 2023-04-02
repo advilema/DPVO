@@ -17,6 +17,7 @@ import torch.nn.functional as F
 
 from dpvo.net import VONet
 from evaluate_tartan import evaluate as validate
+import wandb
 
 
 def show_image(image):
@@ -41,9 +42,20 @@ def kabsch_umeyama(A, B):
     c = VarA / torch.trace(torch.diag(D))
     return c
 
-
+# TODO: add validation
 def train(args):
     """ main training loop """
+
+    wandb.init(
+        project=args.name,
+        config={
+            'data path': args.datapath,
+            'checkpoint': args.ckpt,
+            'learning rate': args.lr,
+            'total steps': args.steps,
+            'n frames': args.n_frames
+        }
+    )
 
 
     # legacy ddp code
@@ -134,18 +146,13 @@ def train(args):
             loss += kl
             loss.backward()
 
+            wandb.log({'loss': loss, 'rotation error': ro_error, 'translation error': tr_error})
+
             print('**** step: {}'.format(total_steps))
             print('loss: {}'.format(loss))
             print('translation error: {}'.format(tr_error))
             print('rotation error: {}'.format(ro_error))
             print()
-
-            with open('rot_error.txt', 'a+') as file:
-                np.savetxt(file, np.array([ro_error.cpu().detach()]))
-            with open('trans_error.txt', 'a+') as file:
-                np.savetxt(file, np.array([tr_error.cpu().detach()]))
-            with open('loss.txt', 'a+') as file:
-                np.savetxt(file, np.array([loss.cpu().detach()]))
 
             torch.nn.utils.clip_grad_norm_(net.parameters(), args.clip)
             optimizer.step()
@@ -177,7 +184,7 @@ def train(args):
                     PATH = 'checkpoints/%s_%06d.pth' % (args.name, total_steps)
                     torch.save(net.state_dict(), PATH)
 
-                #validation_results = validate(None, net)
+                #validation_results = validate(None, net)   # TODO: garda qua per validation
                 #if rank == 0:
                 #    logger.write_dict(validation_results)
 
@@ -185,6 +192,8 @@ def train(args):
                 net.train()
             if total_steps == args.steps:
                 break
+
+    wandb.finish()
 
 
 if __name__ == '__main__':
