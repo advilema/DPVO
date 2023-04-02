@@ -20,6 +20,16 @@ from evaluate_tartan import evaluate as validate
 import wandb
 
 
+def show_image(image):
+    image = image.permute(1, 2, 0).cpu().numpy()
+    cv2.imshow('image', image / 255.0)
+    cv2.waitKey()
+
+def image2gray(image):
+    image = image.mean(dim=0).cpu().numpy()
+    cv2.imshow('image', image / 255.0)
+    cv2.waitKey()
+
 def kabsch_umeyama(A, B):
     n, m = A.shape
     EA = torch.mean(A, axis=0)
