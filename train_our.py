@@ -20,15 +20,57 @@ from evaluate_tartan import evaluate as validate
 import wandb
 
 
-def show_image(image):
-    image = image.permute(1, 2, 0).cpu().numpy()
-    cv2.imshow('image', image / 255.0)
-    cv2.waitKey()
+def evaluate_trajectory(net, images, poses, disps, intrinsics):
+    # fix poses to gt for first 1k steps
+    # so = total_steps < 1000 and args.ckpt is None
+    so = False
 
-def image2gray(image):
-    image = image.mean(dim=0).cpu().numpy()
-    cv2.imshow('image', image / 255.0)
-    cv2.waitKey()
+    poses = SE3(poses).inv()
+    traj = net(images, poses, disps, intrinsics, M=1024, STEPS=18, structure_only=so)
+
+    loss = 0.0
+    ro_error, tr_error = 0., 0.
+    for i, (v, x, y, P1, P2, kl) in enumerate(traj):
+        # v: valid, x: estimated coordinates of the patches in frame ii projected into frame jj,
+        # y: coordinates_gt: same as x but ground truth. Note that to have actual gt you need a depth map,
+        # P1: estimated poses, P2: gt poses, kl: not used.
+
+        e = (x - y).norm(dim=-1)
+        e = e.reshape(-1, 9)[(v > 0.5).reshape(-1)].min(dim=-1).values
+
+        N = P1.shape[1]
+        ii, jj = torch.meshgrid(torch.arange(N), torch.arange(N))
+        ii = ii.reshape(-1).cuda()
+        jj = jj.reshape(-1).cuda()
+
+        k = ii != jj
+        ii = ii[k]
+        jj = jj[k]
+
+        P1 = P1.inv()
+        P2 = P2.inv()
+
+        t1 = P1.matrix()[..., :3, 3]
+        t2 = P2.matrix()[..., :3, 3]
+
+        s = kabsch_umeyama(t2[0], t1[0]).detach().clamp(max=10.0)
+        P1 = P1.scale(s.view(1, 1))
+
+        dP = P1[:, ii].inv() * P1[:, jj]
+        dG = P2[:, ii].inv() * P2[:, jj]
+
+        e1 = (dP * dG.inv()).log()
+        tr = e1[..., 0:3].norm(dim=-1)
+        ro = e1[..., 3:6].norm(dim=-1)
+
+        loss += args.flow_weight * e.mean()
+        if not so and i >= 2:
+            loss += args.pose_weight * (tr.mean() + ro.mean())
+            ro_error += ro.mean()
+            tr_error += tr.mean()
+
+    return loss, tr_error, ro_error
+
 
 def kabsch_umeyama(A, B):
     n, m = A.shape
@@ -42,6 +84,7 @@ def kabsch_umeyama(A, B):
     c = VarA / torch.trace(torch.diag(D))
     return c
 
+
 # TODO: add validation
 def train(args):
     """ main training loop """
@@ -53,17 +96,12 @@ def train(args):
             'checkpoint': args.ckpt,
             'learning rate': args.lr,
             'total steps': args.steps,
-            'n frames': args.n_frames
+            'n frames': args.n_frames,
+            'data augmentation': args.augmentation,
         }
     )
 
-
-    # legacy ddp code
-    rank = 0
-
-    #db = dataset_factory(['tartan'], datapath="datasets/TartanAir", n_frames=args.n_frames)
-    #datapath = '/home/mario/Desktop/Tesi/DPVO/datasets/racing'
-    db = Racing(args.datapath, n_frames=args.n_frames, scale=1.0)
+    db = Racing(args.datapath, n_frames=args.n_frames, scale=1.0, augmentation=args.augmentation)
     train_loader = DataLoader(db, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     net = VONet()
@@ -82,9 +120,6 @@ def train(args):
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, 
         args.lr, args.steps, pct_start=0.01, cycle_momentum=False, anneal_strategy='linear')
 
-    if rank == 0:
-        logger = Logger(args.name, scheduler)
-
     total_steps = 0
 
     while total_steps < args.steps:
@@ -94,56 +129,8 @@ def train(args):
             disps = None
             optimizer.zero_grad()
 
-            # fix poses to gt for first 1k steps
-            #so = total_steps < 1000 and args.ckpt is None
-            so = False
+            loss, tr_error, ro_error = evaluate_trajectory(net, images, poses, disps, intrinsics)
 
-            poses = SE3(poses).inv()
-            traj = net(images, poses, disps, intrinsics, M=1024, STEPS=18, structure_only=so)
-
-            loss = 0.0
-            ro_error, tr_error = 0., 0.
-            for i, (v, x, y, P1, P2, kl) in enumerate(traj):
-                # v: valid, x: estimated coordinates of the patches in frame ii projected into frame jj,
-                # y: coordinates_gt: same as x but ground truth. Note that to have actual gt you need a depth map,
-                # P1: estimated poses, P2: gt poses, kl: not used.
-
-                e = (x - y).norm(dim=-1)
-                e = e.reshape(-1, 9)[(v > 0.5).reshape(-1)].min(dim=-1).values
-
-                N = P1.shape[1]
-                ii, jj = torch.meshgrid(torch.arange(N), torch.arange(N))
-                ii = ii.reshape(-1).cuda()
-                jj = jj.reshape(-1).cuda()
-
-                k = ii != jj
-                ii = ii[k]
-                jj = jj[k]
-
-                P1 = P1.inv()
-                P2 = P2.inv()
-
-                t1 = P1.matrix()[...,:3,3]
-                t2 = P2.matrix()[...,:3,3]
-
-                s = kabsch_umeyama(t2[0], t1[0]).detach().clamp(max=10.0)
-                P1 = P1.scale(s.view(1, 1))
-
-                dP = P1[:,ii].inv() * P1[:,jj]
-                dG = P2[:,ii].inv() * P2[:,jj]
-
-                e1 = (dP * dG.inv()).log()
-                tr = e1[...,0:3].norm(dim=-1)
-                ro = e1[...,3:6].norm(dim=-1)
-
-                loss += args.flow_weight * e.mean()
-                if not so and i >= 2:
-                    loss += args.pose_weight * ( tr.mean() + ro.mean() )
-                    ro_error += ro.mean()
-                    tr_error += tr.mean()
-
-            # kl is 0 (not longer used)
-            loss += kl
             loss.backward()
 
             wandb.log({'loss': loss, 'rotation error': ro_error, 'translation error': tr_error})
@@ -160,6 +147,7 @@ def train(args):
 
             total_steps += 1
 
+            """
             metrics = {
                 "loss": loss.item(),
                 "kl": kl.item(),
@@ -171,20 +159,20 @@ def train(args):
                 "t1": (tr < .001).float().mean().item(),
                 "t2": (tr < .01).float().mean().item(),
             }
-
+            
             if rank == 0:
                 logger.push(metrics)
+            """
 
             if total_steps % (min(int(args.steps / 10), 2500)) == 0:
                 torch.cuda.empty_cache()
 
-                if rank == 0:
-                    if not os.path.isdir('checkpoints'):
-                        os.mkdir('checkpoints')
-                    PATH = 'checkpoints/%s_%06d.pth' % (args.name, total_steps)
-                    torch.save(net.state_dict(), PATH)
+                if not os.path.isdir('checkpoints'):
+                    os.mkdir('checkpoints')
+                PATH = 'checkpoints/%s_%06d.pth' % (args.name, total_steps)
+                torch.save(net.state_dict(), PATH)
 
-                #validation_results = validate(None, net)   # TODO: garda qua per validation
+                #validation_results = validate(None, net)
                 #if rank == 0:
                 #    logger.write_dict(validation_results)
 
@@ -205,9 +193,10 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.00008)
     parser.add_argument('--clip', type=float, default=10.0)
-    parser.add_argument('--n_frames', type=int, default=10)
+    parser.add_argument('--n_frames', type=int, default=15)
+    parser.add_argument('--augmentation', action='store_true')
     parser.add_argument('--pose_weight', type=float, default=10.0)
-    parser.add_argument('--flow_weight', type=float, default=0.1)
+    parser.add_argument('--flow_weight', type=float, default=0.0)
     args = parser.parse_args()
 
     with open('rot_error.txt', 'w') as file:
