@@ -92,7 +92,7 @@ class Racing(Dataset):
         self.n_frames = n_frames
         self.info_dataset = self._build_dataset()
         self.dataset_index = self._build_index()
-        self.dict_test_index = self._build_test_index()
+        #self.dict_test_index = self._build_test_index()
         self.scale = scale
         self.augmentation = augmentation
 
@@ -136,7 +136,7 @@ class Racing(Dataset):
 
         info_dataset = {}
         scenes = glob.glob(osp.join(self.datapath, '*/'))
-        #scenes = [scene for scene in scenes if osp.basename(osp.dirname(scene)) not in test_split]
+        scenes = [scene for scene in scenes if osp.basename(osp.dirname(scene)) not in test_split]
         for scene in tqdm(sorted(scenes)):
             images = sorted(glob.glob(osp.join(scene, 'images/*.png')))
             poses = np.loadtxt(osp.join(scene, 'poses.csv'), delimiter=',')
