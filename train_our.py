@@ -209,7 +209,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_frames', type=int, default=10)
     parser.add_argument('--augmentation', action='store_true')
     parser.add_argument('--pose_weight', type=float, default=10.0)
-    parser.add_argument('--flow_weight', type=float, default=0.1)
+    parser.add_argument('--flow_weight', type=float, default=0.0)
     args = parser.parse_args()
 
     with open('rot_error.txt', 'w') as file:
