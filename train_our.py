@@ -55,6 +55,8 @@ def train(args):
             'total steps': args.steps,
             'n frames': args.n_frames,
             'data augmentation': args.augmentation,
+            'flow weight': args.flow_weight,
+            'pose_weight': args.pose_weight
         }
     )
 
