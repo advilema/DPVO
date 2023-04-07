@@ -2,6 +2,7 @@ import cv2
 import os
 import argparse
 from collections import OrderedDict
+import numpy as np
 
 import torch
 from torch.utils.data import DataLoader
@@ -74,14 +75,17 @@ def validate(db, net):
     losses, tr_errors, ro_errors = [], [], []
     for index in validation_index:
         images, poses, intrinsics = db[index]
+        images = images.unsqueeze(0).cuda()
+        poses = poses.unsqueeze(0).cuda()
+        intrinsics = intrinsics.unsqueeze(0).cuda()
         disps = None
         loss, tr_error, ro_error = evaluate(net, images, poses, disps, intrinsics)
-        losses.append(loss)
-        tr_errors.append(tr_error)
-        ro_errors.append(ro_error)
-    loss_mean = torch.cat(losses).mean()
-    tr_errors_mean = torch.cat(tr_errors).mean()
-    ro_errors_mean = torch.cat(ro_errors).mean()
+        losses.append(loss.item())
+        tr_errors.append(tr_error.item())
+        ro_errors.append(ro_error.item())
+    loss_mean = np.mean(losses)
+    tr_errors_mean = np.mean(tr_errors)
+    ro_errors_mean = np.mean(ro_errors)
     return loss_mean, tr_errors_mean, ro_errors_mean
 
 
@@ -120,7 +124,7 @@ def train(args):
 
     #db = dataset_factory(['tartan'], datapath="datasets/TartanAir", n_frames=args.n_frames)
     #datapath = '/home/mario/Desktop/Tesi/DPVO/datasets/racing'
-    db = Racing(args.datapath, n_frames=args.n_frames, scale=1.0, augmentation=args.augmentation)
+    db = Racing(args.datapath, n_frames=args.n_frames, scale=1.0, augmentation=args.augmentation, validation_size=args.validation_size)
     train_loader = DataLoader(db, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     net = VONet()
@@ -167,7 +171,7 @@ def train(args):
             total_steps += 1
 
             # compute validation loss
-            if total_steps % validate_every_n_steps:
+            if total_steps % validate_every_n_steps == 0:
                 v_loss, v_tr_error, v_ro_error = validate(db, net)
                 wandb.log({'validation loss': v_loss, 'validation translation error': v_tr_error, 'validation rotation error': v_ro_error})
                 print('**** VALIDATION')
@@ -206,6 +210,7 @@ if __name__ == '__main__':
     parser.add_argument('--augmentation', action='store_true')
     parser.add_argument('--pose_weight', type=float, default=10.0)
     parser.add_argument('--flow_weight', type=float, default=0.0)
+    parser.add_argument('--validation_size', type=float, default=0.05, help='percentage of data in validation split')
     args = parser.parse_args()
 
     with open('rot_error.txt', 'w') as file:
