@@ -7,7 +7,7 @@ import os.path as osp
 import imgaug as ia
 from imgaug import augmenters as iaa
 ia.seed(0)
-
+np.random.seed(0)
 
 
 #test_split = [
@@ -86,49 +86,17 @@ def augment_images(images):
 
 
 class Racing(Dataset):
-    def __init__(self, datapath, n_frames=5, scale=0.5, augmentation=True):
+    def __init__(self, datapath, n_frames=5, scale=0.5, augmentation=True, validation_size=0.05):
         super(Racing, self).__init__()
         self.datapath = datapath
         self.n_frames = n_frames
         self.info_dataset = self._build_dataset()
         self.dataset_index = self._build_index()
-        #self.dict_test_index = self._build_test_index()
         self.scale = scale
         self.augmentation = augmentation
-
-
-    def get_test(self, num_iterations):
-        iterations_per_sample = num_iterations // len(test_split)
-
-        for scene in test_split:
-            max_index = len(self.dict_test_index[scene])
-            scene_indices = (np.random.rand(iterations_per_sample)*max_index).astype(int)
-
-            for index in scene_indices:
-                indices = self.dict_test_index[scene]
-                # print(indices)
-
-                images = []
-                for i in indices:
-                    img = cv2.imread(self.info_dataset[scene]['images'][i])
-                    h, w = img.shape[:2]
-                    img = cv2.resize(img, (int(w * self.scale), int(h * self.scale)))
-                    images.append(img)
-
-                poses = [self.info_dataset[scene]['poses'][i] for i in indices]
-                intrinsics = [self.info_dataset[scene]['intrinsics'][i] for i in indices]
-
-                images = np.stack(images).astype(np.float32)
-                # print(images.shape)
-                poses = np.stack(poses).astype(np.float32)
-                intrinsics = np.stack(intrinsics).astype(np.float32)
-
-                images = torch.from_numpy(images).float()
-                images = images.permute(0, 3, 1, 2)
-                poses = torch.from_numpy(poses)
-                intrinsics = torch.from_numpy(intrinsics)
-
-                yield images, poses, intrinsics
+        self.validation_size = validation_size
+        self.validation_index = self._build_validation_index()
+        self.validation = False  # change the value when you want to perform validation
 
     def _build_dataset(self):
         from tqdm import tqdm
@@ -164,25 +132,17 @@ class Racing(Dataset):
                     dataset_index.append([scene, *indices])
         return dataset_index
 
-    def _build_test_index(self):
-        dict_test_index = []
-        for scene in self.info_dataset:
-            if scene not in test_split:
-                continue
-            if scene not in dict_test_index:
-                dict_test_index[scene] = []
-            n_frames_scene = self.info_dataset[scene]['poses'].shape[0]
-            for i in range(n_frames_scene):
-                indices = [i]
-                idx = 1
-                while i + idx < n_frames_scene and idx < self.n_frames:
-                    indices.append(i + idx)
-                    idx += 1
-                if len(indices) == self.n_frames:
-                    dict_test_index[scene].append([*indices])
-        return dict_test_index
+    def _build_validation_index(self):
+        tot_indices = len(self.dataset_index)
+        tot_validation_indices = int(self.validation_size * tot_indices)
+        validation_index = (np.random.rand(tot_validation_indices) * tot_indices).astype(int)
+        return validation_index
 
     def __getitem__(self, index):
+        if not self.validation:
+            # if the index is part of the validation set, randomly resample it
+            while index in self.validation_index:
+                index = (np.random.rand(1)*len(self.dataset_index)).astype(int)[0]
         scene = self.dataset_index[index][0]
         indices = self.dataset_index[index][1:]
         #print(indices)
@@ -193,7 +153,7 @@ class Racing(Dataset):
             h, w = img.shape[:2]
             img = cv2.resize(img, (int(w*self.scale), int(h*self.scale)))
             images.append(img)
-        if self.augmentation:
+        if self.augmentation and not self.validation:
             images = augment_images(images)
 
         poses = [self.info_dataset[scene]['poses'][i] for i in indices]
