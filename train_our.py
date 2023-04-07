@@ -1,34 +1,89 @@
 import cv2
 import os
 import argparse
-import numpy as np
 from collections import OrderedDict
 
-import matplotlib.pyplot as plt
 import torch
-import torch.optim as optim
 from torch.utils.data import DataLoader
-from dpvo.data_readers.factory import dataset_factory
 from dpvo.data_readers.racing import Racing
 
 from dpvo.lietorch import SE3
-from dpvo.logger import Logger
-import torch.nn.functional as F
 
 from dpvo.net import VONet
 from evaluate_tartan import evaluate as validate
 import wandb
 
 
-def show_image(image):
-    image = image.permute(1, 2, 0).cpu().numpy()
-    cv2.imshow('image', image / 255.0)
-    cv2.waitKey()
 
-def image2gray(image):
-    image = image.mean(dim=0).cpu().numpy()
-    cv2.imshow('image', image / 255.0)
-    cv2.waitKey()
+def evaluate(net, images, poses, disps, intrinsics):
+    # fix poses to gt for first 1k steps
+    # so = total_steps < 1000 and args.ckpt is None
+    so = False
+
+    poses = SE3(poses).inv()
+    traj = net(images, poses, disps, intrinsics, M=1024, STEPS=18, structure_only=so)
+
+    loss = 0.0
+    ro_error, tr_error = 0., 0.
+    for i, (v, x, y, P1, P2, kl) in enumerate(traj):
+        # v: valid, x: estimated coordinates of the patches in frame ii projected into frame jj,
+        # y: coordinates_gt: same as x but ground truth. Note that to have actual gt you need a depth map,
+        # P1: estimated poses, P2: gt poses, kl: not used.
+
+        e = (x - y).norm(dim=-1)
+        e = e.reshape(-1, 9)[(v > 0.5).reshape(-1)].min(dim=-1).values
+
+        N = P1.shape[1]
+        ii, jj = torch.meshgrid(torch.arange(N), torch.arange(N))
+        ii = ii.reshape(-1).cuda()
+        jj = jj.reshape(-1).cuda()
+
+        k = ii != jj
+        ii = ii[k]
+        jj = jj[k]
+
+        P1 = P1.inv()
+        P2 = P2.inv()
+
+        t1 = P1.matrix()[..., :3, 3]
+        t2 = P2.matrix()[..., :3, 3]
+
+        s = kabsch_umeyama(t2[0], t1[0]).detach().clamp(max=10.0)
+        P1 = P1.scale(s.view(1, 1))
+
+        dP = P1[:, ii].inv() * P1[:, jj]
+        dG = P2[:, ii].inv() * P2[:, jj]
+
+        e1 = (dP * dG.inv()).log()
+        tr = e1[..., 0:3].norm(dim=-1)
+        ro = e1[..., 3:6].norm(dim=-1)
+
+        loss += args.flow_weight * e.mean()
+        if not so and i >= 2:
+            loss += args.pose_weight * (tr.mean() + ro.mean())
+            ro_error += ro.mean()
+            tr_error += tr.mean()
+
+    return loss, tr_error, ro_error
+
+
+@torch.no_grad()
+def validate(db, net):
+    validation_index = db.validation_index
+    db.validation = True
+    losses, tr_errors, ro_errors = [], [], []
+    for index in validation_index:
+        images, poses, intrinsics = db[index]
+        disps = None
+        loss, tr_error, ro_error = evaluate(net, images, poses, disps, intrinsics)
+        losses.append(loss)
+        tr_errors.append(tr_error)
+        ro_errors.append(ro_error)
+    loss_mean = torch.cat(losses).mean()
+    tr_errors_mean = torch.cat(tr_errors).mean()
+    ro_errors_mean = torch.cat(ro_errors).mean()
+    return loss_mean, tr_errors_mean, ro_errors_mean
+
 
 def kabsch_umeyama(A, B):
     n, m = A.shape
@@ -60,9 +115,8 @@ def train(args):
         }
     )
 
-
-    # legacy ddp code
-    rank = 0
+    ckpt_every_n_steps = min(int(args.steps / 10), 5000)
+    validate_every_n_steps = ckpt_every_n_steps // 5
 
     #db = dataset_factory(['tartan'], datapath="datasets/TartanAir", n_frames=args.n_frames)
     #datapath = '/home/mario/Desktop/Tesi/DPVO/datasets/racing'
@@ -85,9 +139,6 @@ def train(args):
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, 
         args.lr, args.steps, pct_start=0.01, cycle_momentum=False, anneal_strategy='linear')
 
-    if rank == 0:
-        logger = Logger(args.name, scheduler)
-
     total_steps = 0
 
     while total_steps < args.steps:
@@ -97,56 +148,8 @@ def train(args):
             disps = None
             optimizer.zero_grad()
 
-            # fix poses to gt for first 1k steps
-            #so = total_steps < 1000 and args.ckpt is None
-            so = False
+            loss, tr_error, ro_error = evaluate(net, images, poses, disps, intrinsics)
 
-            poses = SE3(poses).inv()
-            traj = net(images, poses, disps, intrinsics, M=1024, STEPS=18, structure_only=so)
-
-            loss = 0.0
-            ro_error, tr_error = 0., 0.
-            for i, (v, x, y, P1, P2, kl) in enumerate(traj):
-                # v: valid, x: estimated coordinates of the patches in frame ii projected into frame jj,
-                # y: coordinates_gt: same as x but ground truth. Note that to have actual gt you need a depth map,
-                # P1: estimated poses, P2: gt poses, kl: not used.
-
-                e = (x - y).norm(dim=-1)
-                e = e.reshape(-1, 9)[(v > 0.5).reshape(-1)].min(dim=-1).values
-
-                N = P1.shape[1]
-                ii, jj = torch.meshgrid(torch.arange(N), torch.arange(N))
-                ii = ii.reshape(-1).cuda()
-                jj = jj.reshape(-1).cuda()
-
-                k = ii != jj
-                ii = ii[k]
-                jj = jj[k]
-
-                P1 = P1.inv()
-                P2 = P2.inv()
-
-                t1 = P1.matrix()[...,:3,3]
-                t2 = P2.matrix()[...,:3,3]
-
-                s = kabsch_umeyama(t2[0], t1[0]).detach().clamp(max=10.0)
-                P1 = P1.scale(s.view(1, 1))
-
-                dP = P1[:,ii].inv() * P1[:,jj]
-                dG = P2[:,ii].inv() * P2[:,jj]
-
-                e1 = (dP * dG.inv()).log()
-                tr = e1[...,0:3].norm(dim=-1)
-                ro = e1[...,3:6].norm(dim=-1)
-
-                loss += args.flow_weight * e.mean()
-                if not so and i >= 2:
-                    loss += args.pose_weight * ( tr.mean() + ro.mean() )
-                    ro_error += ro.mean()
-                    tr_error += tr.mean()
-
-            # kl is 0 (not longer used)
-            loss += kl
             loss.backward()
 
             wandb.log({'loss': loss, 'rotation error': ro_error, 'translation error': tr_error})
@@ -163,33 +166,24 @@ def train(args):
 
             total_steps += 1
 
-            metrics = {
-                "loss": loss.item(),
-                "kl": kl.item(),
-                "px1": (e < .25).float().mean().item(),
-                "ro": ro.float().mean().item(),
-                "tr": tr.float().mean().item(),
-                "r1": (ro < .001).float().mean().item(),
-                "r2": (ro < .01).float().mean().item(),
-                "t1": (tr < .001).float().mean().item(),
-                "t2": (tr < .01).float().mean().item(),
-            }
+            # compute validation loss
+            if total_steps % validate_every_n_steps:
+                v_loss, v_tr_error, v_ro_error = validate(db, net)
+                wandb.log({'validation loss': v_loss, 'validation translation error': v_tr_error, 'validation rotation error': v_ro_error})
+                print('**** VALIDATION')
+                print('loss: {}'.format(v_loss))
+                print('translation error: {}'.format(v_tr_error))
+                print('rotation error: {}'.format(v_ro_error))
+                print()
 
-            if rank == 0:
-                logger.push(metrics)
 
-            if total_steps % (min(int(args.steps / 10), 2500)) == 0:
+            if total_steps % ckpt_every_n_steps == 0:
                 torch.cuda.empty_cache()
 
-                if rank == 0:
-                    if not os.path.isdir('checkpoints'):
-                        os.mkdir('checkpoints')
-                    PATH = 'checkpoints/%s_%06d.pth' % (args.name, total_steps)
-                    torch.save(net.state_dict(), PATH)
-
-                #validation_results = validate(None, net)   # TODO: garda qua per validation
-                #if rank == 0:
-                #    logger.write_dict(validation_results)
+                if not os.path.isdir('checkpoints'):
+                    os.mkdir('checkpoints')
+                PATH = 'checkpoints/%s_%06d.pth' % (args.name, total_steps)
+                torch.save(net.state_dict(), PATH)
 
                 torch.cuda.empty_cache()
                 net.train()
