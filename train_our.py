@@ -74,8 +74,8 @@ def validate(db, net):
     len_validation = len(validation_index)
     db.validation = True
     losses, tr_errors, ro_errors = [], [], []
-    # select only a subset of the validation index to speed up the validation
-    validation_index_indices = (np.random.rand(len_validation//2) * len_validation).astype(int)
+    # select only a subset of 300 samples from the validation index to speed up the validation
+    validation_index_indices = (np.random.rand(min(len_validation//2, 300)) * len_validation).astype(int)
     for index in validation_index[validation_index_indices]:
         images, poses, intrinsics = db[index]
         images = images.unsqueeze(0).cuda()
