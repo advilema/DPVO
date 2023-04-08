@@ -71,9 +71,12 @@ def evaluate(net, images, poses, disps, intrinsics):
 @torch.no_grad()
 def validate(db, net):
     validation_index = db.validation_index
+    len_validation = len(validation_index)
     db.validation = True
     losses, tr_errors, ro_errors = [], [], []
-    for index in validation_index:
+    # select only a subset of the validation index to speed up the validation
+    validation_index_indices = (np.random.rand(len_validation//2) * len_validation).astype(int)
+    for index in validation_index[validation_index_indices]:
         images, poses, intrinsics = db[index]
         images = images.unsqueeze(0).cuda()
         poses = poses.unsqueeze(0).cuda()
