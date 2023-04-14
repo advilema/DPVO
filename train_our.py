@@ -74,8 +74,7 @@ def validate(db, net):
     len_validation = len(validation_index)
     db.validation = True
     losses, tr_errors, ro_errors = [], [], []
-    # select only a subset of 300 samples from the validation index to speed up the validation
-    validation_index_indices = (np.random.rand(min(len_validation//2, 300)) * len_validation).astype(int)
+    validation_index_indices = (np.random.rand(len_validation//2) * len_validation).astype(int)
     for index in validation_index[validation_index_indices]:
         images, poses, intrinsics = db[index]
         images = images.unsqueeze(0).cuda()
@@ -86,6 +85,7 @@ def validate(db, net):
         losses.append(loss.item())
         tr_errors.append(tr_error.item())
         ro_errors.append(ro_error.item())
+    db.validation = False
     loss_mean = np.mean(losses)
     tr_errors_mean = np.mean(tr_errors)
     ro_errors_mean = np.mean(ro_errors)
@@ -109,7 +109,7 @@ def train(args):
     """ main training loop """
 
     wandb.init(
-        project=args.name,
+        project=args.project_name if args.project_name is not None else args.model_name,
         config={
             'data path': args.datapath,
             'checkpoint': args.ckpt,
@@ -125,8 +125,6 @@ def train(args):
     ckpt_every_n_steps = min(int(args.steps / 10), 5000)
     validate_every_n_steps = ckpt_every_n_steps // 5
 
-    #db = dataset_factory(['tartan'], datapath="datasets/TartanAir", n_frames=args.n_frames)
-    #datapath = '/home/mario/Desktop/Tesi/DPVO/datasets/racing'
     db = Racing(args.datapath, n_frames=args.n_frames, scale=1.0, augmentation=args.augmentation, validation_size=args.validation_size)
     train_loader = DataLoader(db, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
@@ -173,8 +171,8 @@ def train(args):
 
             total_steps += 1
 
-            # compute validation loss
-            if total_steps % validate_every_n_steps == 0:
+            if total_steps % ckpt_every_n_steps == 0:
+                # validation
                 v_loss, v_tr_error, v_ro_error = validate(db, net)
                 wandb.log({'validation loss': v_loss, 'validation translation error': v_tr_error, 'validation rotation error': v_ro_error})
                 print('**** VALIDATION')
@@ -183,10 +181,9 @@ def train(args):
                 print('rotation error: {}'.format(v_ro_error))
                 print()
 
-
-            if total_steps % ckpt_every_n_steps == 0:
                 torch.cuda.empty_cache()
 
+                # save model checkpoints
                 if not os.path.isdir('checkpoints'):
                     os.mkdir('checkpoints')
                 PATH = 'checkpoints/%s_%06d.pth' % (args.name, total_steps)
@@ -202,7 +199,8 @@ def train(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--name', default='bla', help='name your experiment')
+    parser.add_argument('--project_name', help='name your experiment')
+    parser.add_argument('--model_name', default='bla', help='name your experiment')
     parser.add_argument('--datapath', default='/data/scratch/marcomagno/racing', help='path to dataset')
     parser.add_argument('--ckpt', help='checkpoint to restore')
     parser.add_argument('--steps', type=int, default=240000)
@@ -216,10 +214,4 @@ if __name__ == '__main__':
     parser.add_argument('--validation_size', type=float, default=0.05, help='percentage of data in validation split')
     args = parser.parse_args()
 
-    with open('rot_error.txt', 'w') as file:
-        file.write('')
-    with open('trans_error.txt', 'w') as file:
-        file.write('')
-    with open('loss.txt', 'w') as file:
-        file.write('')
     train(args)

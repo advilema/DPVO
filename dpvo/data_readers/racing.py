@@ -8,6 +8,7 @@ import imgaug as ia
 from imgaug import augmenters as iaa
 ia.seed(0)
 np.random.seed(0)
+from util import valid_frame_ranges
 
 
 #test_split = [
@@ -121,15 +122,17 @@ class Racing(Dataset):
         for scene in self.info_dataset:
             if scene in test_split:
                 continue
-            n_frames_scene = self.info_dataset[scene]['poses'].shape[0]
-            for i in range(n_frames_scene):
-                indices = [i]
-                idx = 1
-                while i + idx < n_frames_scene and idx < self.n_frames:
-                    indices.append(i + idx)
-                    idx += 1
-                if len(indices) == self.n_frames:
-                    dataset_index.append([scene, *indices])
+            poses = self.info_dataset[scene]['poses']
+            frame_ranges = valid_frame_ranges(poses, num_frames=self.n_frames)
+            for frame_range in frame_ranges:
+                for i in range(frame_range[0], frame_range[1]):
+                    indices = [i]
+                    idx = 1
+                    while i + idx < frame_range[1] and idx < self.n_frames:
+                        indices.append(i + idx)
+                        idx += 1
+                    if len(indices) == self.n_frames:
+                        dataset_index.append([scene, *indices])
         return dataset_index
 
     def _build_validation_index(self):
