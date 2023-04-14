@@ -8,7 +8,7 @@ import imgaug as ia
 from imgaug import augmenters as iaa
 ia.seed(0)
 np.random.seed(0)
-from util import valid_frame_ranges
+from dpvo.data_readers.util import valid_frame_ranges
 
 
 #test_split = [
