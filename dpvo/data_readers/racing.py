@@ -34,6 +34,7 @@ test_split = [
     'indoor_forward_12_snapdragon',
     'outdoor_forward_9_snapdragon',
     'outdoor_forward_10_snapdragon',
+    'test',
 ]
 
 
