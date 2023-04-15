@@ -186,7 +186,7 @@ def train(args):
                 # save model checkpoints
                 if not os.path.isdir('checkpoints'):
                     os.mkdir('checkpoints')
-                PATH = 'checkpoints/%s_%06d.pth' % (args.name, total_steps)
+                PATH = 'checkpoints/%s_%06d.pth' % (args.model_name, total_steps)
                 torch.save(net.state_dict(), PATH)
 
                 torch.cuda.empty_cache()
