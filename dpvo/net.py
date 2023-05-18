@@ -292,7 +292,7 @@ class VONet(nn.Module):
             coords1 = coords.permute(0, 1, 4, 2, 3).contiguous()
 
             corr = corr_fn(kk, jj, coords1)
-            net, (delta, weight, _) = self.update(net, imap[:,kk], corr, None, ii, jj, kk)
+            net, (delta, weight, _) = self.update(net, imap[:,kk], corr, ii, jj, kk)
 
             lmbda = 1e-4
             target = coords[...,p//2,p//2,:] + delta
