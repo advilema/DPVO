@@ -173,13 +173,14 @@ def train(args):
 
             if total_steps % ckpt_every_n_steps == 0:
                 # validation
-                v_loss, v_tr_error, v_ro_error = validate(db, net)
-                wandb.log({'validation loss': v_loss, 'validation translation error': v_tr_error, 'validation rotation error': v_ro_error})
-                print('**** VALIDATION')
-                print('loss: {}'.format(v_loss))
-                print('translation error: {}'.format(v_tr_error))
-                print('rotation error: {}'.format(v_ro_error))
-                print()
+                if args.validation_size > 0:
+                    v_loss, v_tr_error, v_ro_error = validate(db, net)
+                    wandb.log({'validation loss': v_loss, 'validation translation error': v_tr_error, 'validation rotation error': v_ro_error})
+                    print('**** VALIDATION')
+                    print('loss: {}'.format(v_loss))
+                    print('translation error: {}'.format(v_tr_error))
+                    print('rotation error: {}'.format(v_ro_error))
+                    print()
 
                 torch.cuda.empty_cache()
 

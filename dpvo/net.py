@@ -11,6 +11,7 @@ from . import fastba
 from . import altcorr
 from . import lietorch
 from .lietorch import SE3
+import time
 
 from .extractor import BasicEncoder, BasicEncoder4
 from .blocks import GradientClip, GatedResidual, SoftAgg
@@ -18,6 +19,11 @@ from .blocks import GradientClip, GatedResidual, SoftAgg
 from .utils import *
 from .ba import BA
 from . import projective_ops as pops
+import random
+
+torch.manual_seed(42)
+random.seed(42)
+np.random.seed(42)
 
 autocast = torch.cuda.amp.autocast
 import matplotlib.pyplot as plt
@@ -71,24 +77,56 @@ class Update(nn.Module):
             nn.Sigmoid())
 
 
-    def forward(self, net, inp, corr, flow, ii, jj, kk):
+    def forward(self, net, inp, corr, ii, jj, kk):
         """ update operator """
 
+        # correlation
+        start_netcorr = time.perf_counter()
         net = net + inp + self.corr(corr)
         net = self.norm(net)
+        stop_netcorr = time.perf_counter()
+        with open('times_corr.txt', 'a+') as file:
+            np.savetxt(file, np.array([1000 * (stop_netcorr - start_netcorr)]))
 
+        # Find neighbours for the convolution
+        start_conv = time.perf_counter()
         ix, jx = fastba.neighbors(kk, jj)
+
         mask_ix = (ix >= 0).float().reshape(1, -1, 1)
         mask_jx = (jx >= 0).float().reshape(1, -1, 1)
 
+        # convolution 1
         net = net + self.c1(mask_ix * net[:,ix])
+
+        # convolution 2
         net = net + self.c2(mask_jx * net[:,jx])
 
+        stop_conv = time.perf_counter()
+        with open('times_conv.txt', 'a+') as file:
+            np.savetxt(file, np.array([1000*(stop_conv - start_conv)]))
+
+        # soft aggregator frames
+        start_agg_frames = time.perf_counter()
         net = net + self.agg_kk(net, kk)
+        stop_agg_frames = time.perf_counter()
+        with open('times_agg_frames.txt', 'a+') as file:
+            np.savetxt(file, np.array([1000*(stop_agg_frames - start_agg_frames)]))
+
+        # soft aggregator patches
+        start_agg_patches = time.perf_counter()
         net = net + self.agg_ij(net, ii*12345 + jj)
+        stop_agg_patches = time.perf_counter()
+        with open('times_agg_patches.txt', 'a+') as file:
+            np.savetxt(file, np.array([1000*(stop_agg_patches - start_agg_patches)]))
 
+        # Transition block
+        start_transition = time.perf_counter()
         net = self.gru(net)
+        stop_transition = time.perf_counter()
+        with open('times_transition.txt', 'a+') as file:
+            np.savetxt(file, np.array([1000*(stop_transition - start_transition)]))
 
+        # flow and weight factor heads
         return net, (self.d(net), self.w(net), None)
 
 
@@ -96,8 +134,8 @@ class Patchifier(nn.Module):
     def __init__(self, patch_size=3):
         super(Patchifier, self).__init__()
         self.patch_size = patch_size
-        self.fnet = BasicEncoder4(output_dim=128, norm_fn='instance')
-        self.inet = BasicEncoder4(output_dim=DIM, norm_fn='none')
+        self.fnet = BasicEncoder4(output_dim=128, norm_fn='instance')  # matching network
+        self.inet = BasicEncoder4(output_dim=DIM, norm_fn='none')  # context network
 
     def __image_gradient(self, images):
         gray = ((images + 0.5) * (255.0 / 2)).sum(dim=2)
@@ -109,14 +147,14 @@ class Patchifier(nn.Module):
 
     def forward(self, images, patches_per_image=80, disps=None, gradient_bias=False, return_color=False):
         """ extract patches from input images """
-        fmap = self.fnet(images) / 4.0
-        imap = self.inet(images) / 4.0
+        fmap = self.fnet(images) / 4.0  # shape [1, 1, 128, 160, 120]
+        imap = self.inet(images) / 4.0  # shape [1, 1, 384, 160, 120]
 
         b, n, c, h, w = fmap.shape
 
         # bias patch selection towards regions with high gradient
         if gradient_bias:
-            g = self.__image_gradient(images)
+            g = self.__image_gradient(images)  # shape [1, 1, 159, 119]
             x = torch.randint(1, w-1, size=[n, 3*patches_per_image], device="cuda")
             y = torch.randint(1, h-1, size=[n, 3*patches_per_image], device="cuda")
 
@@ -147,9 +185,14 @@ class Patchifier(nn.Module):
         index = torch.arange(n, device="cuda").view(n, 1)
         index = index.repeat(1, patches_per_image).reshape(-1)
 
+        #print(f"fmap: {fmap.shape}, gmap: {gmap.shape}, imap: {imap.shape}, patches: {patches.shape}")
         if return_color:
             return fmap, gmap, imap, patches, index, clr
 
+        # fmap: matching features, gmap: patches extracted from matching features
+        # imap: patches extracted from context features (1x1), patches: patches indices in the fmap with inverse depth
+        # shapes: fmap:[1, 1, 128, img_width/4, img_height/4], gmap: [1, n of patches per frame, 128, patch dim, patch dim],
+        # imap: [1, n of patches per frame, 384, 1, 1],  patches: [1, 96, 3 (x,y, and inv depth), patch dim, patch dim]
         return fmap, gmap, imap, patches, index
 
 
@@ -172,8 +215,9 @@ class CorrBlock:
 class VONet(nn.Module):
     def __init__(self, use_viewer=False):
         super(VONet, self).__init__()
-        self.P = 3
+        self.P = 5  # patch size
         self.patchify = Patchifier(self.P)
+
         self.update = Update(self.P)
 
         self.DIM = DIM
@@ -196,19 +240,19 @@ class VONet(nn.Module):
         b, N, c, h, w = fmap.shape
         p = self.P
 
-        patches_gt = patches.clone()
-        Ps = poses
+        patches_gt = patches.clone()  # patches with known depth
+        Ps = poses  # gt poses
 
         d = patches[..., 2, p//2, p//2]
-        patches = set_depth(patches, torch.rand_like(d))
+        patches = set_depth(patches, torch.rand_like(d))  # patches with unknown depth (initialized at random)
 
         kk, jj = flatmeshgrid(torch.where(ix < 8)[0], torch.arange(0,8, device="cuda"))
         ii = ix[kk]
 
         imap = imap.view(b, -1, DIM)
         net = torch.zeros(b, len(kk), DIM, device="cuda", dtype=torch.float)
-        
-        Gs = SE3.IdentityLike(poses)
+
+        Gs = SE3.IdentityLike(poses)  # these are the estimated poses
 
         if structure_only:
             Gs.data[:] = poses.data[:]
@@ -222,7 +266,7 @@ class VONet(nn.Module):
 
             n = ii.max() + 1
             if len(traj) >= 8 and n < images.shape[1]:
-                if not structure_only: Gs.data[:,n] = Gs.data[:,n-1]
+                if not structure_only: Gs.data[:,n] = Gs.data[:,n-1]  # TODO: pensa a come migliorare questa cosa
                 kk1, jj1 = flatmeshgrid(torch.where(ix  < n)[0], torch.arange(n, n+1, device="cuda"))
                 kk2, jj2 = flatmeshgrid(torch.where(ix == n)[0], torch.arange(0, n+1, device="cuda"))
 
@@ -243,6 +287,7 @@ class VONet(nn.Module):
                 patches[:,ix==n,2] = torch.median(patches[:,(ix == n-1) | (ix == n-2),2])
                 n = ii.max() + 1
 
+            # coords are the coordinates of the points in patches in frame ii into frame jj
             coords = pops.transform(Gs, patches, intrinsics, ii, jj, kk)
             coords1 = coords.permute(0, 1, 4, 2, 3).contiguous()
 
@@ -254,6 +299,7 @@ class VONet(nn.Module):
 
             ep = 10
             for itr in range(2):
+                # update our estimate of the poses (GS) and the depths (in patches) using BA
                 Gs, patches = BA(Gs, patches, intrinsics, target, weight, lmbda, ii, jj, kk, 
                     bounds, ep=ep, fixedp=1, structure_only=structure_only)
 
