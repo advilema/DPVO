@@ -128,7 +128,7 @@ def train(args):
     db = Racing(args.datapath, n_frames=args.n_frames, scale=1.0, augmentation=args.augmentation, validation_size=args.validation_size)
     train_loader = DataLoader(db, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
-    net = VONet()
+    net = VONet(patch_size=args.patch_size)
     net.train()
     net.cuda()
 
@@ -204,6 +204,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_name', default='bla', help='name your experiment')
     parser.add_argument('--datapath', default='/data/scratch/marcomagno/racing', help='path to dataset')
     parser.add_argument('--ckpt', help='checkpoint to restore')
+    parser.add_argument('--patch_size', type=int, default=3)
     parser.add_argument('--steps', type=int, default=240000)
     parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.00008)
@@ -213,6 +214,7 @@ if __name__ == '__main__':
     parser.add_argument('--pose_weight', type=float, default=10.0)
     parser.add_argument('--flow_weight', type=float, default=0.0)
     parser.add_argument('--validation_size', type=float, default=0.05, help='percentage of data in validation split')
+
     args = parser.parse_args()
 
     train(args)
