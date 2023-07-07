@@ -10,7 +10,6 @@ from .lietorch import SE3
 from .net import VONet
 from .utils import *
 from . import projective_ops as pops
-import torch_tensorrt
 import random
 
 import time
