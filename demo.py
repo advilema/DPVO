@@ -140,7 +140,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--network', type=str, default='dpvo.pth')
-    parser.add_argument('--datafolder', type=str, default='/data/scratch/marcomagno/datasets/uzh_fpv/indoor_forward_3_snapdragon_with_gt/images')
+    parser.add_argument('--datafolder', type=str, default='/data/scratch/marcomagno/datasets/uzh_fpv/indoor_forward_3_snapdragon_with_gt')
     parser.add_argument('--imagedir', type=str)
     parser.add_argument('--calib', type=str)
     parser.add_argument('--ts', type=str, ) # path to ground_truth timestamps
